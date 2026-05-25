@@ -46,10 +46,31 @@ MavESP8266Bridge::MavESP8266Bridge()
     , _component_id(0)
     , _seq_expected(0)
     , _last_heartbeat(0)
+    , _last_heartbeat_ms(0)
+    , _heartbeat_seen(false)
+    , _message_counter_count(0)
+    , _message_counter_overflow(0)
+    , _boat_attitude_seen(false)
+    , _boat_heave_seen(false)
+    , _boat_speed_seen(false)
+    , _boat_pid_seen(false)
+    , _m2_state_seen(false)
+    , _boat_attitude_ms(0)
+    , _boat_heave_ms(0)
+    , _boat_speed_ms(0)
+    , _boat_pid_ms(0)
+    , _m2_state_ms(0)
     , _last_status_time(0)
     , _forwardTo(NULL)
 {
     memset(&_status, 0, sizeof(_status));
+    memset(&_heartbeat, 0, sizeof(_heartbeat));
+    memset(_message_counters, 0, sizeof(_message_counters));
+    memset(&_boat_attitude, 0, sizeof(_boat_attitude));
+    memset(&_boat_heave, 0, sizeof(_boat_heave));
+    memset(&_boat_speed, 0, sizeof(_boat_speed));
+    memset(&_boat_pid, 0, sizeof(_boat_pid));
+    memset(&_m2_state, 0, sizeof(_m2_state));
 }
 
 //---------------------------------------------------------------------------------

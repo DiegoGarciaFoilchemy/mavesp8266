@@ -44,6 +44,11 @@
 
 #undef F
 #include <ardupilotmega/mavlink.h>
+#include <foilchemy/mavlink_msg_boat_attitude.h>
+#include <foilchemy/mavlink_msg_boat_heave.h>
+#include <foilchemy/mavlink_msg_boat_speed.h>
+#include <foilchemy/mavlink_msg_boat_pid.h>
+#include <foilchemy/mavlink_msg_m2_state.h>
 
  extern "C" {
     // Espressif SDK
@@ -66,7 +71,7 @@ class MavESP8266GCS;
 #define MAVESP8266_VERSION          ((MAVESP8266_VERSION_MAJOR << 24) & 0xFF00000) | ((MAVESP8266_VERSION_MINOR << 16) & 0x00FF0000) | (MAVESP8266_VERSION_BUILD & 0xFFFF)
 
 //-- Debug sent out to Serial1 (GPIO02), which is TX only (no RX).
-//#define ENABLE_DEBUG
+// #define ENABLE_DEBUG
 
 #ifdef ENABLE_DEBUG
 #define DEBUG_LOG(format, ...) do { getWorld()->getLogger()->log(format, ## __VA_ARGS__); } while(0)
@@ -82,6 +87,13 @@ struct linkStatus {
     uint32_t    packets_sent;
     uint32_t    radio_status_sent;
     uint8_t     queue_status;
+};
+
+#define MAVESP8266_MSG_COUNTER_MAX 64
+
+struct msgCounter {
+    uint32_t msgid;
+    uint32_t count;
 };
 
 //---------------------------------------------------------------------------------
@@ -100,6 +112,32 @@ public:
     virtual uint8_t systemID        () { return _system_id;     }
     virtual uint8_t componentID     () { return _component_id;  }
     virtual linkStatus* getStatus   () { return &_status;       }
+    virtual const mavlink_heartbeat_t* getHeartbeat() { return &_heartbeat; }
+    virtual uint32_t heartbeatAgeMs() { return _heard_from ? (millis() - _last_heartbeat_ms) : 0; }
+    virtual bool heartbeatSeen() { return _heartbeat_seen; }
+    virtual uint16_t messageCounterCount() { return _message_counter_count; }
+    virtual uint32_t messageCounterOverflow() { return _message_counter_overflow; }
+    virtual uint32_t messageCounterId(uint16_t index) {
+        return index < _message_counter_count ? _message_counters[index].msgid : 0;
+    }
+    virtual uint32_t messageCounterValue(uint16_t index) {
+        return index < _message_counter_count ? _message_counters[index].count : 0;
+    }
+    virtual bool boatAttitudeSeen() { return _boat_attitude_seen; }
+    virtual bool boatHeaveSeen() { return _boat_heave_seen; }
+    virtual bool boatSpeedSeen() { return _boat_speed_seen; }
+    virtual bool boatPidSeen() { return _boat_pid_seen; }
+    virtual bool m2StateSeen() { return _m2_state_seen; }
+    virtual uint32_t boatAttitudeAgeMs() { return _boat_attitude_seen ? (millis() - _boat_attitude_ms) : 0; }
+    virtual uint32_t boatHeaveAgeMs() { return _boat_heave_seen ? (millis() - _boat_heave_ms) : 0; }
+    virtual uint32_t boatSpeedAgeMs() { return _boat_speed_seen ? (millis() - _boat_speed_ms) : 0; }
+    virtual uint32_t boatPidAgeMs() { return _boat_pid_seen ? (millis() - _boat_pid_ms) : 0; }
+    virtual uint32_t m2StateAgeMs() { return _m2_state_seen ? (millis() - _m2_state_ms) : 0; }
+    virtual const mavlink_boat_attitude_t* boatAttitude() { return &_boat_attitude; }
+    virtual const mavlink_boat_heave_t* boatHeave() { return &_boat_heave; }
+    virtual const mavlink_boat_speed_t* boatSpeed() { return &_boat_speed; }
+    virtual const mavlink_boat_pid_t* boatPid() { return &_boat_pid; }
+    virtual const mavlink_m2_state_t* m2State() { return &_m2_state; }
     mavlink_channel_t       _send_chan;
     mavlink_channel_t       _recv_chan;
 protected:
@@ -111,6 +149,27 @@ protected:
     uint8_t                 _component_id;
     uint8_t                 _seq_expected;
     uint32_t                _last_heartbeat;
+    uint32_t                _last_heartbeat_ms;
+    bool                    _heartbeat_seen;
+    mavlink_heartbeat_t     _heartbeat;
+    msgCounter              _message_counters[MAVESP8266_MSG_COUNTER_MAX];
+    uint16_t                _message_counter_count;
+    uint32_t                _message_counter_overflow;
+    bool                    _boat_attitude_seen;
+    bool                    _boat_heave_seen;
+    bool                    _boat_speed_seen;
+    bool                    _boat_pid_seen;
+    bool                    _m2_state_seen;
+    uint32_t                _boat_attitude_ms;
+    uint32_t                _boat_heave_ms;
+    uint32_t                _boat_speed_ms;
+    uint32_t                _boat_pid_ms;
+    uint32_t                _m2_state_ms;
+    mavlink_boat_attitude_t _boat_attitude;
+    mavlink_boat_heave_t    _boat_heave;
+    mavlink_boat_speed_t    _boat_speed;
+    mavlink_boat_pid_t      _boat_pid;
+    mavlink_m2_state_t      _m2_state;
     linkStatus              _status;
     unsigned long           _last_status_time;
     MavESP8266Bridge*       _forwardTo;

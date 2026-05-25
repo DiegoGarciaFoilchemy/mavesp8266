@@ -4,6 +4,9 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
+        0,
+        0,
+        0,
  * are met:
  *
  * 1. Redistributions of source code must retain the above copyright
@@ -50,6 +53,103 @@ const char PROGMEM kUPLOADFORM[] = "<h1><a href='/'>MAVLink WiFi Bridge</a></h1>
 const char PROGMEM kHEADER[]     = "<!doctype html><html><head><title>MavLink Bridge</title></head><body><h1><a href='/'>MAVLink WiFi Bridge</a></h1>";
 const char PROGMEM kBADARG[]     = "BAD ARGS";
 const char PROGMEM kAPPJSON[]    = "application/json";
+const char PROGMEM kTELEMETRYPAGE[] = R"rawliteral(
+<!doctype html>
+<html>
+<head>
+<title>MavLink Bridge Telemetry</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:#fafafa;color:#111;}
+h1{margin:10px 12px;font-size:24px;}
+h1 a{text-decoration:none;color:#111;}
+#status{background:#d4edda;border:1px solid #28a745;color:#155724;font-weight:bold;padding:10px;margin:10px 12px;border-radius:5px;font-size:clamp(15px,3.7vw,26px);text-align:center;}
+#vals{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:10px 12px;}
+.telem-item{border:1px solid #ccc;padding:8px 6px;background:#fff;border-radius:6px;max-width:180px;justify-self:center;text-align:center;}
+.telem-label{font-weight:600;display:block;margin-bottom:6px;font-size:clamp(11px,1.2vw,13px);letter-spacing:0.04em;text-transform:uppercase;opacity:0.8;}
+.telem-value{font-size:clamp(27px,4.0vw,48px);font-weight:700;line-height:1.1;}
+@media (max-width:1100px){#vals{grid-template-columns:repeat(3,minmax(120px,1fr));}}
+@media (max-width:820px){#vals{grid-template-columns:repeat(2,minmax(120px,1fr));}}
+@media (max-width:560px){
+    h1{margin:8px 10px;font-size:21px;}
+    #status{margin:8px 10px;padding:8px;font-size:clamp(14px,4.1vw,20px);}
+    #vals{margin:8px 8px;gap:5px;grid-template-columns:repeat(3,minmax(0,1fr));}
+    .telem-item{padding:7px 4px;max-width:100%;justify-self:stretch;}
+    .telem-label{margin-bottom:4px;font-size:11px;}
+    .telem-value{font-size:clamp(20px,7.4vw,32px);}
+}
+@media (max-width:340px){#vals{grid-template-columns:repeat(2,minmax(0,1fr));}}
+</style>
+</head>
+<body>
+<h1><a href='/'>MAVLink WiFi Bridge</a></h1>
+<div id='status'>Status: waiting for data...</div>
+<div id='vals'>waiting for data</div>
+<script>
+(function(){
+var inFlight=false;
+var reqId=0;
+function oneDec(v){var n=Number(v);return isNaN(n)?'--.-':n.toFixed(1);}
+function relDec(v,p,h){var angle=Number(v);var pitch=h?Number(p):0;var out=angle-pitch;return isNaN(out)?'--.-':out.toFixed(1);}
+function setStatus(text,isBad){
+    var e=document.getElementById('status');
+    e.textContent='Status: '+text;
+    if(isBad){
+        e.style.background='#f8d7da';
+        e.style.borderColor='#dc3545';
+        e.style.color='#721c24';
+    }else{
+        e.style.background='#d4edda';
+        e.style.borderColor='#28a745';
+        e.style.color='#155724';
+    }
+}
+function updateFoils(d){
+    var arm='NO HEARTBEAT';
+    if(d.hb_seen){arm=d.armed?'ARMED':'DISARMED';}
+    setStatus(arm,false);
+    var html='';
+    html+='<div class="telem-item"><span class="telem-label">MAIN BB</span><span class="telem-value">'+relDec(d.main_ps,d.pitch,d.att_seen)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">PITCH</span><span class="telem-value">'+(d.att_seen?oneDec(d.pitch)+' &deg;':'--.- &deg;')+'</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">MAIN TB</span><span class="telem-value">'+relDec(d.main_sb,d.pitch,d.att_seen)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">RUDDER BB</span><span class="telem-value">'+relDec(d.rudder_ps,d.pitch,d.att_seen)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">ROLL</span><span class="telem-value">'+(d.att_seen?oneDec(d.roll)+' &deg;':'--.- &deg;')+'</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">RUDDER TB</span><span class="telem-value">'+relDec(d.rudder_sb,d.pitch,d.att_seen)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">HEAVE</span><span class="telem-value">'+oneDec(d.heave)+' m</span></div>';    
+    document.getElementById('vals').innerHTML=html;
+}
+function poll(){
+    if(inFlight){return;}
+    inFlight=true;
+    var x=new XMLHttpRequest();
+    var thisReq=++reqId;
+    x.timeout=1200;
+    x.onreadystatechange=function(){
+        if(x.readyState!==4){return;}
+        if(thisReq!==reqId){return;}
+        inFlight=false;
+        if(x.status===200){
+            try {
+                updateFoils(JSON.parse(x.responseText));
+            } catch(e) {
+                setStatus('bad telemetry payload',true);
+            }
+        } else {
+            setStatus('telemetry link slow/unavailable',true);
+        }
+    };
+    x.ontimeout=function(){if(thisReq===reqId){inFlight=false;setStatus('telemetry timeout',true);}};
+    x.onerror=function(){if(thisReq===reqId){inFlight=false;setStatus('telemetry request error',true);}};
+    x.open('GET','/api/foils?t=' + Date.now(),true);
+    x.send();
+}
+poll();
+setInterval(poll,1000);
+})();
+</script>
+</body>
+</html>
+)rawliteral";
 
 const char* kBAUD       = "baud";
 const char* kPWD        = "pwd";
@@ -292,6 +392,8 @@ static void handle_root()
     message += "<p>\n";
     message += "<ul>\n";
     message += "<li><a href='/getstatus'>Get Status</a>\n";
+    message += "<li><a href='/telemetry'>Telemetry</a>\n";
+    message += "<li><a href='/mavlink_analyser'>MAVLink Analyser</a>\n";
     message += "<li><a href='/setup'>Setup</a>\n";
     message += "<li><a href='/getparameters'>Get Parameters</a>\n";
     message += "<li><a href='/update'>Update Firmware</a>\n";
@@ -445,6 +547,170 @@ void handle_getJLog()
     payLoad += logText;
     payLoad += "\"}";
     webServer.send(200, FPSTR(kAPPJSON), payLoad);
+}
+
+//---------------------------------------------------------------------------------
+void handle_getFoils()
+{
+    MavESP8266Vehicle* vehicle = getWorld()->getVehicle();
+    const mavlink_m2_state_t* m2 = vehicle->m2State();
+    const mavlink_boat_attitude_t* att = vehicle->boatAttitude();
+    const mavlink_boat_heave_t* heave = vehicle->boatHeave();
+    const mavlink_heartbeat_t* hb = vehicle->getHeartbeat();
+
+    const uint32_t kFoilsHeartbeatStaleMs = HEARTBEAT_TIMEOUT;
+    const uint32_t kFoilsAttitudeStaleMs = 3000;
+    const uint32_t kFoilsHeaveStaleMs = 3000;
+    const uint32_t kFoilsM2StaleMs = 3000;
+
+    bool hbSeen = vehicle->heardFrom() && vehicle->heartbeatSeen() && (vehicle->heartbeatAgeMs() <= kFoilsHeartbeatStaleMs);
+    bool attSeen = vehicle->boatAttitudeSeen() && (vehicle->boatAttitudeAgeMs() <= kFoilsAttitudeStaleMs);
+    bool heaveSeen = vehicle->boatHeaveSeen() && (vehicle->boatHeaveAgeMs() <= kFoilsHeaveStaleMs);
+    bool m2Seen = vehicle->m2StateSeen() && (vehicle->m2StateAgeMs() <= kFoilsM2StaleMs);
+    bool armed = hbSeen && ((hb->base_mode & MAV_MODE_FLAG_SAFETY_ARMED) != 0);
+
+    printf("[FOILS] hbSeen=%d (heardFrom=%d, hbSeen_flag=%d, hb_age=%u, timeout=%u) m2Seen=%d (age=%u) heaveSeen=%d (age=%u) attSeen=%d (age=%u)\n",
+        hbSeen, vehicle->heardFrom(), vehicle->heartbeatSeen(), (unsigned int)vehicle->heartbeatAgeMs(), (unsigned int)kFoilsHeartbeatStaleMs,
+        m2Seen, (unsigned int)vehicle->m2StateAgeMs(),
+        heaveSeen, (unsigned int)vehicle->boatHeaveAgeMs(),
+        attSeen, (unsigned int)vehicle->boatAttitudeAgeMs());
+
+    char mainSb[16];
+    char mainPs[16];
+    char rudderSb[16];
+    char rudderPs[16];
+    char heaveValue[16];
+    char pitch[16];
+    char roll[16];
+
+    if(m2Seen) {
+        snprintf(mainSb, sizeof(mainSb), "%.1f", m2->main_sb);
+        snprintf(mainPs, sizeof(mainPs), "%.1f", m2->main_ps);
+        snprintf(rudderSb, sizeof(rudderSb), "%.1f", m2->rudder_sb);
+        snprintf(rudderPs, sizeof(rudderPs), "%.1f", m2->rudder_ps);
+    } else {
+        snprintf(mainSb, sizeof(mainSb), "\"NaN\"");
+        snprintf(mainPs, sizeof(mainPs), "\"NaN\"");
+        snprintf(rudderSb, sizeof(rudderSb), "\"NaN\"");
+        snprintf(rudderPs, sizeof(rudderPs), "\"NaN\"");
+    }
+
+    if(heaveSeen) {
+        snprintf(heaveValue, sizeof(heaveValue), "%.1f", heave->heave);
+    } else {
+        snprintf(heaveValue, sizeof(heaveValue), "\"NaN\"");
+    }
+
+    if(attSeen) {
+        snprintf(pitch, sizeof(pitch), "%.1f", att->pitch);
+        snprintf(roll, sizeof(roll), "%.1f", att->roll);
+    } else {
+        snprintf(pitch, sizeof(pitch), "\"NaN\"");
+        snprintf(roll, sizeof(roll), "\"NaN\"");
+    }
+
+    char message[448];
+    snprintf(
+        message,
+        sizeof(message),
+        "{\"m2_seen\":%s,\"att_seen\":%s,\"heave_seen\":%s,\"hb_seen\":%s,\"armed\":%s,\"m2_age_ms\":%u,\"main_sb\":%s,\"main_ps\":%s,\"rudder_sb\":%s,\"rudder_ps\":%s,\"heave\":%s,\"pitch\":%s,\"roll\":%s}",
+        m2Seen ? "true" : "false",
+        attSeen ? "true" : "false",
+        heaveSeen ? "true" : "false",
+        hbSeen ? "true" : "false",
+        armed ? "true" : "false",
+        (unsigned int)vehicle->m2StateAgeMs(),
+        mainSb,
+        mainPs,
+        rudderSb,
+        rudderPs,
+        heaveValue,
+        pitch,
+        roll
+    );
+    setNoCacheHeaders();
+    webServer.send(200, FPSTR(kAPPJSON), message);
+}
+
+//---------------------------------------------------------------------------------
+static void handle_telemetry()
+{
+    setNoCacheHeaders();
+    webServer.send_P(200, kTEXTHTML, kTELEMETRYPAGE);
+}
+
+//---------------------------------------------------------------------------------
+static void handle_reboot_autopilot()
+{
+    MavESP8266Vehicle* vehicle = getWorld()->getVehicle();
+    if(!vehicle->heardFrom()) {
+        returnFail("No vehicle heartbeat");
+        return;
+    }
+
+    mavlink_message_t msg;
+    mavlink_msg_command_long_pack(
+        vehicle->systemID(),
+        MAV_COMP_ID_UDP_BRIDGE,
+        &msg,
+        vehicle->systemID(),
+        vehicle->componentID(),
+        MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN,
+        0,
+        1.f,
+        1.f,
+        1.f,
+        1.f,
+        1.f,
+        1.f,
+        1.f
+    );
+    vehicle->sendMessage(&msg);
+    respondOK();
+}
+
+//---------------------------------------------------------------------------------
+static void handle_mavlink_analyser()
+{
+    String message = FPSTR(kHEADER);
+    message += "<h2>MAVLink Message Analyser</h2>\n";
+    message += "<style>\n";
+    message += "table{border-collapse:collapse;margin:20px 0;}\n";
+    message += "th,td{border:1px solid #ccc;padding:8px 12px;text-align:left;}\n";
+    message += "th{background-color:#333;color:#fff;}\n";
+    message += "tr:nth-child(even){background-color:#f9f9f9;}\n";
+    message += "</style>\n";
+    message += "<form method='POST' action='/mavlink_analyser/reboot' onsubmit=\"return confirm('Reboot the autopilot?');\">";
+    message += "<input type='submit' value='Reboot Autopilot'>";
+    message += "</form>\n";
+    message += "<table>\n";
+    message += "<tr><th>Message ID</th><th>Count</th></tr>\n";
+    
+    MavESP8266Vehicle* vehicle = getWorld()->getVehicle();
+    uint16_t count = vehicle->messageCounterCount();
+    
+    for(uint16_t i = 0; i < count; i++) {
+        uint32_t msgid = vehicle->messageCounterId(i);
+        uint32_t msgcount = vehicle->messageCounterValue(i);
+        message += "<tr><td>";
+        message += msgid;
+        message += "</td><td>";
+        message += msgcount;
+        message += "</td></tr>\n";
+    }
+    
+    if(vehicle->messageCounterOverflow() > 0) {
+        message += "<tr><td colspan='2' style='background-color:#ffcccc;'>";
+        message += "Overflow: ";
+        message += vehicle->messageCounterOverflow();
+        message += " additional message types</td></tr>\n";
+    }
+    
+    message += "</table>\n";
+    message += "<p><a href='/'>Back to Home</a></p>\n";
+    message += "</body>";
+    setNoCacheHeaders();
+    webServer.send(200, FPSTR(kTEXTHTML), message);
 }
 
 //---------------------------------------------------------------------------------
@@ -639,6 +905,10 @@ MavESP8266Httpd::begin(MavESP8266Update* updateCB_)
     webServer.on("/getstatus",      handle_getStatus);
     webServer.on("/reboot",         handle_reboot);
     webServer.on("/setup",          handle_setup);
+    webServer.on("/telemetry",      handle_telemetry);
+    webServer.on("/mavlink_analyser", handle_mavlink_analyser);
+    webServer.on("/mavlink_analyser/reboot", HTTP_POST, handle_reboot_autopilot);
+    webServer.on("/api/foils",      handle_getFoils);
     webServer.on("/info.json",      handle_getJSysInfo);
     webServer.on("/status.json",    handle_getJSysStatus);
     webServer.on("/log.json",       handle_getJLog);

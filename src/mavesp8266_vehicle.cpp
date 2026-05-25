@@ -196,10 +196,17 @@ MavESP8266Vehicle::_readMessage()
                         _system_id      = _message[_queue_count].sysid;
                         _seq_expected   = _message[_queue_count].seq + 1;
                         _last_heartbeat = millis();
+                        mavlink_msg_heartbeat_decode(&_message[_queue_count], &_heartbeat);
+                        _last_heartbeat_ms = _last_heartbeat;
+                        _heartbeat_seen = true;
                     }
                 } else {
-                    if(_message[_queue_count].msgid == MAVLINK_MSG_ID_HEARTBEAT)
+                    if(_message[_queue_count].msgid == MAVLINK_MSG_ID_HEARTBEAT) {
+                        mavlink_msg_heartbeat_decode(&_message[_queue_count], &_heartbeat);
                         _last_heartbeat = millis();
+                        _last_heartbeat_ms = _last_heartbeat;
+                        _heartbeat_seen = true;
+                    }
                     _checkLinkErrors(&_message[_queue_count]);
                 }
 
@@ -209,6 +216,47 @@ MavESP8266Vehicle::_readMessage()
                     // but we do forward them, so when new messages
                     // are added we can bridge them
                     break;
+                }
+
+                bool foundCounter = false;
+                uint32_t messageId = _message[_queue_count].msgid;
+                for(uint16_t i = 0; i < _message_counter_count; i++) {
+                    if(_message_counters[i].msgid == messageId) {
+                        _message_counters[i].count++;
+                        foundCounter = true;
+                        break;
+                    }
+                }
+                if(!foundCounter) {
+                    if(_message_counter_count < MAVESP8266_MSG_COUNTER_MAX) {
+                        _message_counters[_message_counter_count].msgid = messageId;
+                        _message_counters[_message_counter_count].count = 1;
+                        _message_counter_count++;
+                    } else {
+                        _message_counter_overflow++;
+                    }
+                }
+
+                if(_message[_queue_count].msgid == MAVLINK_MSG_ID_BOAT_ATTITUDE) {
+                    mavlink_msg_boat_attitude_decode(&_message[_queue_count], &_boat_attitude);
+                    _boat_attitude_seen = true;
+                    _boat_attitude_ms = millis();
+                } else if(_message[_queue_count].msgid == MAVLINK_MSG_ID_BOAT_HEAVE) {
+                    mavlink_msg_boat_heave_decode(&_message[_queue_count], &_boat_heave);
+                    _boat_heave_seen = true;
+                    _boat_heave_ms = millis();
+                } else if(_message[_queue_count].msgid == MAVLINK_MSG_ID_BOAT_SPEED) {
+                    mavlink_msg_boat_speed_decode(&_message[_queue_count], &_boat_speed);
+                    _boat_speed_seen = true;
+                    _boat_speed_ms = millis();
+                } else if(_message[_queue_count].msgid == MAVLINK_MSG_ID_BOAT_PID) {
+                    mavlink_msg_boat_pid_decode(&_message[_queue_count], &_boat_pid);
+                    _boat_pid_seen = true;
+                    _boat_pid_ms = millis();
+                } else if(_message[_queue_count].msgid == MAVLINK_MSG_ID_M2_STATE) {
+                    mavlink_msg_m2_state_decode(&_message[_queue_count], &_m2_state);
+                    _m2_state_seen = true;
+                    _m2_state_ms = millis();
                 }
 
                 //-- Check for message we might be interested
