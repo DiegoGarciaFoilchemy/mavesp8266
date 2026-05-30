@@ -65,18 +65,23 @@ h1{margin:10px 12px;font-size:24px;}
 h1 a{text-decoration:none;color:#111;}
 #status{background:#d4edda;border:1px solid #28a745;color:#155724;font-weight:bold;padding:10px;margin:10px 12px;border-radius:5px;font-size:clamp(15px,3.7vw,26px);text-align:center;}
 #vals{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:10px 12px;}
-.telem-item{border:1px solid #ccc;padding:8px 6px;background:#fff;border-radius:6px;max-width:180px;justify-self:center;text-align:center;}
-.telem-label{font-weight:600;display:block;margin-bottom:6px;font-size:clamp(11px,1.2vw,13px);letter-spacing:0.04em;text-transform:uppercase;opacity:0.8;}
-.telem-value{font-size:clamp(27px,4.0vw,48px);font-weight:700;line-height:1.1;}
+.telem-item{border:1px solid #ccc;padding:12px 6px;background:#fff;border-radius:6px;max-width:180px;justify-self:center;text-align:center;}
+.telem-state-ok{background:#d4edda;border-color:#28a745;color:#155724;}
+.telem-state-bad{background:#f8d7da;border-color:#dc3545;color:#721c24;}
+.telem-state-nd{background:#fff3cd;border-color:#ffeeba;color:#856404;}
+.telem-label{font-weight:600;display:block;margin-bottom:6px;font-size:14px;letter-spacing:0.04em;text-transform:uppercase;opacity:0.8;}
+.telem-value{font-size:clamp(52px,7.2vw,86px);font-weight:700;line-height:1.1;}
+.telem-value-state{font-size:clamp(15px,3.7vw,26px);}
 @media (max-width:1100px){#vals{grid-template-columns:repeat(3,minmax(120px,1fr));}}
 @media (max-width:820px){#vals{grid-template-columns:repeat(2,minmax(120px,1fr));}}
 @media (max-width:560px){
     h1{margin:8px 10px;font-size:21px;}
     #status{margin:8px 10px;padding:8px;font-size:clamp(14px,4.1vw,20px);}
     #vals{margin:8px 8px;gap:5px;grid-template-columns:repeat(3,minmax(0,1fr));}
-    .telem-item{padding:7px 4px;max-width:100%;justify-self:stretch;}
-    .telem-label{margin-bottom:4px;font-size:11px;}
-    .telem-value{font-size:clamp(20px,7.4vw,32px);}
+    .telem-item{padding:10px 4px;max-width:100%;justify-self:stretch;}
+    .telem-label{margin-bottom:4px;font-size:14px;}
+    .telem-value{font-size:clamp(36px,11.4vw,58px);}
+    .telem-value-state{font-size:clamp(14px,4.1vw,20px);}
 }
 @media (max-width:340px){#vals{grid-template-columns:repeat(2,minmax(0,1fr));}}
 </style>
@@ -104,18 +109,45 @@ function setStatus(text,isBad){
         e.style.color='#155724';
     }
 }
+function stateText(v,ok,no){
+    var n=Number(v);
+    if(isNaN(n)){return 'NO DATA';}
+    return (n===0)?ok:no;
+}
+function heaveStateText(v){
+    var n=Number(v);
+    if(isNaN(n)){return 'NO DATA';}
+    if(n>=1 && n<=4){return 'USS:'+String(n);}
+    return 'NO USS';
+}
+function stateClass(t){
+    if(t==='NO DATA'){return 'telem-state-nd';}
+    return (t.indexOf('NO ')===0)?'telem-state-bad':'telem-state-ok';
+}
 function updateFoils(d){
     var arm='NO HEARTBEAT';
     if(d.hb_seen){arm=d.armed?'ARMED':'DISARMED';}
     setStatus(arm,false);
     var html='';
+    var attTxt=stateText(d.attitude_state,'IMU OK','NO IMU');
+    var spdTxt=stateText(d.speed_state,'GPS OK','NO GPS');
+    var hvTxt=heaveStateText(d.heave_state);
+    html+='<div class="telem-item '+stateClass(attTxt)+'"><span class="telem-value telem-value-state">'+attTxt+'</span></div>';
+    html+='<div class="telem-item '+stateClass(spdTxt)+'"><span class="telem-value telem-value-state">'+spdTxt+'</span></div>';
+    html+='<div class="telem-item '+stateClass(hvTxt)+'"><span class="telem-value telem-value-state">'+hvTxt+'</span></div>';
     html+='<div class="telem-item"><span class="telem-label">MAIN BB</span><span class="telem-value">'+relDec(d.main_ps,d.pitch,d.att_seen)+' &deg;</span></div>';
     html+='<div class="telem-item"><span class="telem-label">PITCH</span><span class="telem-value">'+(d.att_seen?oneDec(d.pitch)+' &deg;':'--.- &deg;')+'</span></div>';
     html+='<div class="telem-item"><span class="telem-label">MAIN TB</span><span class="telem-value">'+relDec(d.main_sb,d.pitch,d.att_seen)+' &deg;</span></div>';
     html+='<div class="telem-item"><span class="telem-label">RUDDER BB</span><span class="telem-value">'+relDec(d.rudder_ps,d.pitch,d.att_seen)+' &deg;</span></div>';
     html+='<div class="telem-item"><span class="telem-label">ROLL</span><span class="telem-value">'+(d.att_seen?oneDec(d.roll)+' &deg;':'--.- &deg;')+'</span></div>';
     html+='<div class="telem-item"><span class="telem-label">RUDDER TB</span><span class="telem-value">'+relDec(d.rudder_sb,d.pitch,d.att_seen)+' &deg;</span></div>';
-    html+='<div class="telem-item"><span class="telem-label">HEAVE</span><span class="telem-value">'+oneDec(d.heave)+' m</span></div>';    
+    html+='<div class="telem-item"><span class="telem-label">MAIN OFFS BB</span><span class="telem-value">'+oneDec(d.main_ps_offset)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">HEAVE (m)</span><span class="telem-value">'+oneDec(d.heave)+'</span></div>'; 
+    html+='<div class="telem-item"><span class="telem-label">MAIN OFFS TB</span><span class="telem-value">'+oneDec(d.main_sb_offset)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">RUD OFFS BB</span><span class="telem-value">'+oneDec(d.rudder_ps_offset)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">TRIM OFFS</span><span class="telem-value">'+oneDec(d.trim_offset)+' &deg;</span></div>';
+    html+='<div class="telem-item"><span class="telem-label">RUD OFFS TB</span><span class="telem-value">'+oneDec(d.rudder_sb_offset)+' &deg;</span></div>';
+   
     document.getElementById('vals').innerHTML=html;
 }
 function poll(){
@@ -123,7 +155,7 @@ function poll(){
     inFlight=true;
     var x=new XMLHttpRequest();
     var thisReq=++reqId;
-    x.timeout=1200;
+    x.timeout=3000;
     x.onreadystatechange=function(){
         if(x.readyState!==4){return;}
         if(thisReq!==reqId){return;}
@@ -579,6 +611,14 @@ void handle_getFoils()
     char mainPs[16];
     char rudderSb[16];
     char rudderPs[16];
+    char rudderSbOffset[16];
+    char rudderPsOffset[16];
+    char mainSbOffset[16];
+    char mainPsOffset[16];
+    char trimOffset[16];
+    char attitudeState[16];
+    char speedState[16];
+    char heaveState[16];
     char heaveValue[16];
     char pitch[16];
     char roll[16];
@@ -588,11 +628,27 @@ void handle_getFoils()
         snprintf(mainPs, sizeof(mainPs), "%.1f", m2->main_ps);
         snprintf(rudderSb, sizeof(rudderSb), "%.1f", m2->rudder_sb);
         snprintf(rudderPs, sizeof(rudderPs), "%.1f", m2->rudder_ps);
+        snprintf(rudderSbOffset, sizeof(rudderSbOffset), "%.1f", m2->user_rudder_sb_offset);
+        snprintf(rudderPsOffset, sizeof(rudderPsOffset), "%.1f", m2->user_rudder_ps_offset);
+        snprintf(mainSbOffset, sizeof(mainSbOffset), "%.1f", m2->user_main_sb_offset);
+        snprintf(mainPsOffset, sizeof(mainPsOffset), "%.1f", m2->user_main_ps_offset);
+        snprintf(trimOffset, sizeof(trimOffset), "%.1f", m2->user_pitch_sp_offset);
+        snprintf(attitudeState, sizeof(attitudeState), "%u", (unsigned int)m2->attitude_state);
+        snprintf(speedState, sizeof(speedState), "%u", (unsigned int)m2->speed_state);
+        snprintf(heaveState, sizeof(heaveState), "%u", (unsigned int)m2->heave_state);
     } else {
         snprintf(mainSb, sizeof(mainSb), "\"NaN\"");
         snprintf(mainPs, sizeof(mainPs), "\"NaN\"");
         snprintf(rudderSb, sizeof(rudderSb), "\"NaN\"");
         snprintf(rudderPs, sizeof(rudderPs), "\"NaN\"");
+        snprintf(rudderSbOffset, sizeof(rudderSbOffset), "\"NaN\"");
+        snprintf(rudderPsOffset, sizeof(rudderPsOffset), "\"NaN\"");
+        snprintf(mainSbOffset, sizeof(mainSbOffset), "\"NaN\"");
+        snprintf(mainPsOffset, sizeof(mainPsOffset), "\"NaN\"");
+        snprintf(trimOffset, sizeof(trimOffset), "\"NaN\"");
+        snprintf(attitudeState, sizeof(attitudeState), "\"NaN\"");
+        snprintf(speedState, sizeof(speedState), "\"NaN\"");
+        snprintf(heaveState, sizeof(heaveState), "\"NaN\"");
     }
 
     if(heaveSeen) {
@@ -609,11 +665,11 @@ void handle_getFoils()
         snprintf(roll, sizeof(roll), "\"NaN\"");
     }
 
-    char message[448];
+    char message[960];
     snprintf(
         message,
         sizeof(message),
-        "{\"m2_seen\":%s,\"att_seen\":%s,\"heave_seen\":%s,\"hb_seen\":%s,\"armed\":%s,\"m2_age_ms\":%u,\"main_sb\":%s,\"main_ps\":%s,\"rudder_sb\":%s,\"rudder_ps\":%s,\"heave\":%s,\"pitch\":%s,\"roll\":%s}",
+        "{\"m2_seen\":%s,\"att_seen\":%s,\"heave_seen\":%s,\"hb_seen\":%s,\"armed\":%s,\"m2_age_ms\":%u,\"main_sb\":%s,\"main_ps\":%s,\"rudder_sb\":%s,\"rudder_ps\":%s,\"main_sb_offset\":%s,\"main_ps_offset\":%s,\"rudder_sb_offset\":%s,\"rudder_ps_offset\":%s,\"trim_offset\":%s,\"attitude_state\":%s,\"speed_state\":%s,\"heave_state\":%s,\"heave\":%s,\"pitch\":%s,\"roll\":%s}",
         m2Seen ? "true" : "false",
         attSeen ? "true" : "false",
         heaveSeen ? "true" : "false",
@@ -624,6 +680,14 @@ void handle_getFoils()
         mainPs,
         rudderSb,
         rudderPs,
+        mainSbOffset,
+        mainPsOffset,
+        rudderSbOffset,
+        rudderPsOffset,
+        trimOffset,
+        attitudeState,
+        speedState,
+        heaveState,
         heaveValue,
         pitch,
         roll
